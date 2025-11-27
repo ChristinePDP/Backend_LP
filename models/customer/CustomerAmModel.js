@@ -1,0 +1,57 @@
+import db from '../../config/db.js';
+
+const CustomerAmModel = {
+  // GET all amenities with availability logic
+  async getAll() {
+    const query = `
+      SELECT a.*, 
+      (SELECT COUNT(*) FROM ReservationDb b 
+       WHERE b.amenity_id = a.id 
+       AND b.date = CURDATE() 
+       AND b.status IN ('Confirmed', 'Checked-In')) as booked_today
+      FROM AmenitiesDb a 
+      ORDER BY a.id DESC
+    `;
+    const [rows] = await db.query(query);
+    return rows;
+  },
+
+  // GET single amenity by ID
+  async getById(id) {
+    const query = `
+      SELECT a.*, 
+      (SELECT COUNT(*) FROM ReservationDb b 
+       WHERE b.amenity_id = a.id 
+       AND b.date = CURDATE() 
+       AND b.status IN ('Confirmed', 'Checked-In')) as booked_today
+      FROM AmenitiesDb a 
+      WHERE a.id = ?
+    `;
+    const [rows] = await db.query(query, [id]);
+    return rows[0];
+  },
+
+  // Format amenity data with availability logic
+  formatAmenity(amenity) {
+    const totalQuantity = amenity.quantity ? parseInt(amenity.quantity) : 0;
+    const currentBooked = amenity.booked_today || 0;
+    const isFullyBooked = currentBooked >= totalQuantity;
+    const isManuallyAvailable = (amenity.available === 'Yes' || amenity.available === 1);
+    const finalAvailable = isManuallyAvailable && !isFullyBooked;
+
+    return {
+      id: amenity.id,
+      name: amenity.name,
+      type: amenity.type || 'General',
+      description: amenity.description,
+      capacity: amenity.capacity,
+      price: parseFloat(amenity.price),
+      available: finalAvailable ? 'Yes' : 'No',
+      quantity: totalQuantity,
+      remaining: Math.max(0, totalQuantity - currentBooked),
+      image: amenity.image
+    };
+  }
+};
+
+export default CustomerAmModel;
