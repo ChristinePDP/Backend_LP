@@ -29,6 +29,25 @@ const OwnerAmenityModel = {
         );
     },
 
-    };
+    update: async (id, data) => {
+        const { name, description, price, type, available, capacity, quantity, image } = data;
+        if (image) {
+            return await db.query(
+                'UPDATE AmenitiesDb SET name=?, description=?, price=?, type=?, available=?, capacity=?, quantity=?, image=? WHERE id=?',
+                [name, description, price, type, available, capacity, quantity, image, id]
+            );
+        } else {
+            return await db.query(
+                'UPDATE AmenitiesDb SET name=?, description=?, price=?, type=?, available=?, capacity=?, quantity=? WHERE id=?',
+                [name, description, price, type, available, capacity, quantity, id]
+            );
+        }
+    },
+
+    delete: async (id) => {
+        return await db.query('DELETE FROM AmenitiesDb WHERE id = ?', [id]);
+    }
+
+};
 
 module.exports = OwnerAmenityModel;
