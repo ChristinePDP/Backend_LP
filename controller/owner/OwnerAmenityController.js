@@ -1,4 +1,5 @@
-const OwnerAmenityModel = require('../../models/owner/OwnerAmenityModel');
+
+import OwnerAmenityModel from '../../models/owner/OwnerAmenityModel.js';
 
 const OwnerAmenityController = {
     getAll: async (req, res) => {
@@ -73,4 +74,4 @@ const OwnerAmenityController = {
 
 };
 
-module.exports = OwnerAmenityController;
+export default OwnerAmenityController;

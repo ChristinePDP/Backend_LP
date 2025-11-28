@@ -1,10 +1,9 @@
-// 1. IMPORTANTE: Load dotenv para mabasa ang .env file
-require('dotenv').config(); 
 
-const mysql = require('mysql2/promise');
+import 'dotenv/config.js'; 
+
+import mysql from 'mysql2/promise';
 
 const db = mysql.createPool({
-    // 2. Gagamit na tayo ng process.env
     host: process.env.DB_HOST, 
     user: process.env.DB_USER, 
     password: process.env.DB_PASSWORD, 
@@ -14,7 +13,7 @@ const db = mysql.createPool({
     ssl: {
         rejectUnauthorized: true
     },
-    // --- STABILITY SETTINGS (Parehas lang sa dati) ---
+    // --- STABILITY SETTINGS ---
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
@@ -36,4 +35,4 @@ db.getConnection()
         console.error('Check your .env file details!');
     });
 
-module.exports = db;
+export default db;

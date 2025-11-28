@@ -1,8 +1,7 @@
-const db = require('../../config/db');
+import db from '../../config/db.js';
 
 const OwnerAmenityModel = {
     getAll: async () => {
-        // Updated: AmenitiesDb, ReservationDb
         const query = `
             SELECT a.*, 
             (SELECT COUNT(*) FROM ReservationDb b 
@@ -12,6 +11,7 @@ const OwnerAmenityModel = {
             FROM AmenitiesDb a 
             ORDER BY a.id DESC
         `;
+
         const [rows] = await db.query(query);
         return rows;
     },
@@ -50,4 +50,4 @@ const OwnerAmenityModel = {
 
 };
 
-module.exports = OwnerAmenityModel;
+export default OwnerAmenityModel;
