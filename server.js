@@ -2,8 +2,23 @@ import express from "express";
 import 'dotenv/config.js'
 import cors from "cors";
 import path from "path";
+// ----------------------------------------------------
+// routes para sa user
+// ----------------------------------------------------
 import UserRoutes from "./routers/UserRoutes.js"; 
+// ----------------------------------------------------
+
+// ----------------------------------------------------
+// routes para sa customer
+// ----------------------------------------------------
 import CustomerAmRoutes from "./routers/customer/CustomerAmRoutes.js";
+// ----------------------------------------------------
+
+// ----------------------------------------------------
+// routes para sa owner
+// ----------------------------------------------------
+import OwnerAmenityRoutes from "./routers/owner/ownerAmenityRoutes.js"; 
+// ----------------------------------------------------
 
 const app = express();
 
@@ -24,8 +39,24 @@ app.use((req, res, next) => {
     next();
 });
 
+// ----------------------------------------------------
+// routes para sa user
+// ----------------------------------------------------
 app.use('/api/auth', UserRoutes);
+// ----------------------------------------------------
+
+// ----------------------------------------------------
+// routes para sa customer
+// ----------------------------------------------------
 app.use('/api/amenities', CustomerAmRoutes);  
+// ----------------------------------------------------
+
+// ----------------------------------------------------
+// routes para sa owner
+// ----------------------------------------------------
+app.use('/api/owner/amenities', OwnerAmenityRoutes); 
+// ----------------------------------------------------
+
 
 app.get('/', (req, res) => {
     res.json({ message: 'Server is running' });
