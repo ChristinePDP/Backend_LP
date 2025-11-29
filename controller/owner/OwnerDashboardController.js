@@ -31,4 +31,32 @@ const OwnerDashboardController = {
             res.status(500).json({ message: 'Error fetching sales charts and stats' }); 
         }
     },
-}
+
+    getSalesHistory: async (req, res) => {
+        try {
+            const { startDate, endDate, category, paymentMethod } = req.query;
+            const history = await OwnerDashboardModel.getSalesHistory(startDate, endDate, category, paymentMethod);
+            res.json(history);
+        } catch (err) {
+            console.error("Sales History Controller Error:", err);
+            res.status(500).json([]);
+        }
+    },
+    
+    getYears: async (req, res) => {
+        try { 
+            const years = await OwnerDashboardModel.getYears(); 
+            res.json(years); 
+        } catch (err) { res.status(500).json([]); }
+    },
+
+    getFeedback: async (req, res) => {
+        try {
+            const { startDate, endDate, filter } = req.query;
+            const feedback = await OwnerDashboardModel.getFeedback(startDate, endDate, filter);
+            res.json({ feedback });
+        } catch (err) { res.status(500).json({ feedback: [] }); }
+    },
+};
+
+export default OwnerDashboardController;
