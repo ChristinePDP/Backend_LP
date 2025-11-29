@@ -18,6 +18,7 @@ import CustomerAmRoutes from "./routers/customer/CustomerAmRoutes.js";
 // routes para sa owner
 // ----------------------------------------------------
 import OwnerAmenityRoutes from "./routers/owner/ownerAmenityRoutes.js"; 
+import ownerDashboardRoutes from './routers/owner/ownerDashboardRoutes.js';
 // ----------------------------------------------------
 
 const app = express();
@@ -31,6 +32,7 @@ let corsOptions = {
 
 app.use(express.json());
 app.use(cors(corsOptions));
+
 
 app.use('/uploads/am_images', express.static(path.join(process.cwd(), 'uploads', 'am_images')));
 
@@ -54,7 +56,8 @@ app.use('/api/amenities', CustomerAmRoutes);
 // ----------------------------------------------------
 // routes para sa owner
 // ----------------------------------------------------
-app.use('/api/owner/amenities', OwnerAmenityRoutes); 
+app.use('/api/owner/amenities', OwnerAmenityRoutes);
+app.use('/api/owner', ownerDashboardRoutes); 
 // ----------------------------------------------------
 
 
