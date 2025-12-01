@@ -2,24 +2,12 @@ import express from "express";
 import 'dotenv/config.js'
 import cors from "cors";
 import path from "path";
-// ----------------------------------------------------
-// routes para sa user
-// ----------------------------------------------------
 import UserRoutes from "./routers/UserRoutes.js"; 
-// ----------------------------------------------------
-
-// ----------------------------------------------------
-// routes para sa customer
-// ----------------------------------------------------
 import CustomerAmRoutes from "./routers/customer/CustomerAmRoutes.js";
-// ----------------------------------------------------
-
-// ----------------------------------------------------
-// routes para sa owner
-// ----------------------------------------------------
 import OwnerAmenityRoutes from "./routers/owner/ownerAmenityRoutes.js"; 
 import ownerDashboardRoutes from './routers/owner/ownerDashboardRoutes.js';
-// ----------------------------------------------------
+import transactionRoutes from './routers/TransactionRoutes.js';
+
 
 const app = express();
 
@@ -33,7 +21,6 @@ let corsOptions = {
 app.use(express.json());
 app.use(cors(corsOptions));
 
-
 app.use('/uploads/am_images', express.static(path.join(process.cwd(), 'uploads', 'am_images')));
 
 app.use((req, res, next) => {
@@ -41,25 +28,27 @@ app.use((req, res, next) => {
     next();
 });
 
-// ----------------------------------------------------
-// routes para sa user
-// ----------------------------------------------------
+
 app.use('/api/auth', UserRoutes);
-// ----------------------------------------------------
 
-// ----------------------------------------------------
-// routes para sa customer
-// ----------------------------------------------------
 app.use('/api/amenities', CustomerAmRoutes);  
-// ----------------------------------------------------
 
-// ----------------------------------------------------
 // routes para sa owner
-// ----------------------------------------------------
 app.use('/api/owner/amenities', OwnerAmenityRoutes);
+app.use('/uploads/payments', express.static(path.join(process.cwd(), 'uploads', 'payments')));
 app.use('/api/owner', ownerDashboardRoutes); 
-// ----------------------------------------------------
 
+// NEW: routes para sa transactions at reservations
+app.use('/api/transactions', transactionRoutes);
+
+
+app.get('/api/health', (req, res) => {
+    res.json({ 
+        success: true, 
+        message: 'IRMS API is running!',
+        timestamp: new Date().toISOString()
+    });
+});
 
 app.get('/', (req, res) => {
     res.json({ message: 'Server is running' });
@@ -67,7 +56,8 @@ app.get('/', (req, res) => {
 
 try {
     app.listen(process.env.PORT || 5000, () => {
-        console.log(`Listening to port ${process.env.PORT || 5000}...`);
+        console.log(`🚀 Server running on port ${process.env.PORT || 5000}`);
+        console.log(`📍 Health check: http://localhost:${process.env.PORT || 5000}/api/health`);
     });
 } catch (e) {
     console.log(e);
