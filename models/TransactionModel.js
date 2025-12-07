@@ -12,8 +12,8 @@ const generateTransactionRef = () => {
 
 const TransactionModel = {
   // Create new transaction - FIXED
+  // 1. CREATE TRANSACTION (Combined Fields)
   async create(transactionData) {
-    // Destructure from the parameter, not from req.body
     const {
       transaction_ref,
       customer_name,
@@ -22,17 +22,22 @@ const TransactionModel = {
       total_amount,
       downpayment,
       balance,
-      proof_of_payment = null
-    } = transactionData; // This is the parameter passed from controller
+      proof_of_payment = null,
+      user_id,                  // ✅ Included for Registered Users
+      booking_type = 'Online',
+      payment_status = 'Partial',
+      booking_status = 'Pending'
+    } = transactionData; 
 
-    console.log('Creating transaction with data in model:', transactionData); // Debug log
+    // Debugging
+    console.log('📝 Creating Transaction for User ID:', user_id);
 
     const [result] = await db.query(
       `INSERT INTO TransactionDb (
         transaction_ref, customer_name, contact_number, customer_address,
         total_amount, downpayment, balance, payment_status, booking_type, 
-        booking_status, proof_of_payment, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'Partial', 'Online', 'Pending', ?, NOW())`,
+        booking_status, proof_of_payment, user_id, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 8 HOUR))`, 
       [
         transaction_ref,
         customer_name,
@@ -41,19 +46,14 @@ const TransactionModel = {
         total_amount,
         downpayment,
         balance,
-        proof_of_payment
+        payment_status,
+        booking_type, 
+        booking_status, 
+        proof_of_payment,
+        user_id // ✅ Passed successfully
       ]
     );
     return result.insertId;
-  },
-
-  // Find by customer name and contact number
-  async findByCustomer(customer_name, contact_number) {
-    const [rows] = await db.query(
-      'SELECT * FROM TransactionDb WHERE customer_name = ? AND contact_number = ? ORDER BY created_at DESC',
-      [customer_name, contact_number]
-    );
-    return rows;
   },
 
   // Find by transaction reference
