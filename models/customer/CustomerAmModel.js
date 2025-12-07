@@ -1,4 +1,4 @@
-import db from '../../config/db.js';
+import db from '../../config/db.js'; // ES Module import
 
 const CustomerAmModel = {
   // GET all amenities
@@ -6,17 +6,24 @@ const CustomerAmModel = {
     const query = `
       SELECT a.*, 
       (SELECT COUNT(*) FROM ReservationDb b 
-       WHERE b.amenity_id = a.id            -- Eto, okay na gamitin ang ID
-       AND b.check_in_date = CURDATE()      -- Eto, pinalitan ko ng check_in_date
-       AND b.status IN ('Confirmed', 'Checked-In')) as booked_today
+        WHERE b.amenity_id = a.id           -- Corrected: amenity_id
+        AND b.check_in_date = CURDATE()     -- Corrected: check_in_date
+        AND b.status IN ('Confirmed', 'Checked-In')
+      ) as booked_today
       FROM AmenitiesDb a 
       ORDER BY a.id DESC
     `;
-    const [rows] = await db.query(query);
-    return rows;
+    
+    try {
+      const [rows] = await db.query(query);
+      return rows;
+    } catch (error) {
+      console.error("Error in CustomerAmModel.getAll:", error);
+      throw error;
+    }
   },
 
-  // GET single amenity by ID
+  
   async getById(id) {
     const query = `
       SELECT a.*, 
