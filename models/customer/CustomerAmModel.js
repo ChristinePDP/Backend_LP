@@ -28,14 +28,21 @@ const CustomerAmModel = {
     const query = `
       SELECT a.*, 
       (SELECT COUNT(*) FROM ReservationDb b 
-       WHERE b.amenity_id = a.id            -- ID na ang gamit
-       AND b.check_in_date = CURDATE()      -- check_in_date na ang gamit
-       AND b.status IN ('Confirmed', 'Checked-In')) as booked_today
+        WHERE b.amenity_id = a.id 
+        AND b.check_in_date = CURDATE() 
+        AND b.status IN ('Confirmed', 'Checked-In')
+      ) as booked_today
       FROM AmenitiesDb a 
       WHERE a.id = ?
     `;
-    const [rows] = await db.query(query, [id]);
-    return rows[0];
+
+    try {
+      const [rows] = await db.query(query, [id]);
+      return rows[0];
+    } catch (error) {
+      console.error("Error in CustomerAmModel.getById:", error);
+      throw error;
+    }
   },
 
   formatAmenity(amenity) {
