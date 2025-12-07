@@ -46,10 +46,19 @@ const CustomerAmModel = {
   },
 
   formatAmenity(amenity) {
+    
+    if (!amenity) return null;
+
     const totalQuantity = amenity.quantity ? parseInt(amenity.quantity) : 0;
     const currentBooked = amenity.booked_today || 0;
+    
+    
     const isFullyBooked = currentBooked >= totalQuantity;
+    
+    
     const isManuallyAvailable = (amenity.available === 'Yes' || amenity.available === 1);
+    
+    
     const finalAvailable = isManuallyAvailable && !isFullyBooked;
 
     return {
@@ -59,9 +68,9 @@ const CustomerAmModel = {
       description: amenity.description,
       capacity: amenity.capacity,
       price: parseFloat(amenity.price),
-      available: finalAvailable ? 'Yes' : 'No',
+      available: finalAvailable ? 'Yes' : 'No', 
       quantity: totalQuantity,
-      remaining: Math.max(0, totalQuantity - currentBooked),
+      remaining: Math.max(0, totalQuantity - currentBooked), 
       image: amenity.image
     };
   },
