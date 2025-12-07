@@ -24,20 +24,20 @@ const CustomerFeedbackModel = {
 
   
   async create(data) {
-    const query = `INSERT INTO FeedbackDb (customer_name, rating, comment, date, rating_service, rating_cleanliness, rating_amenities) VALUES (?, ?, ?, NOW(), ?, ?, ?)`;
-    
-    const finalRating = Math.round(data.rating); 
+    const query = `INSERT INTO FeedbackDb (customer_name, rating, comment, date, rating_service, rating_cleanliness, rating_amenities) VALUES (?, ?, ?, NOW(), ?, ?, ?)`;
+    
+    const finalRating = Math.round(data.rating); 
 
-    const [result] = await db.query(query, [
-      data.name, 
-      finalRating, 
-      data.comment,
-      data.ratings.service,       // Breakdown
-      data.ratings.cleanliness,   // Breakdown
-      data.ratings.amenities      // Breakdown
-    ]);
-    return result;
-  }
+    const [result] = await db.query(query, [
+      data.name, 
+      finalRating, 
+      data.comment,
+      data.ratings.service,      
+      data.ratings.cleanliness,  
+      data.ratings.amenities     
+    ]);
+    return result;
+  }
 };
 
 export default CustomerFeedbackModel;
