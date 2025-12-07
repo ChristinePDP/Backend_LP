@@ -76,8 +76,13 @@ const CustomerAmModel = {
   },
 
   async getFeatured() {
-    const [rows] = await db.query("SELECT * FROM AmenitiesDb LIMIT 3");
-    return rows;
+    try {
+      const [rows] = await db.query("SELECT * FROM AmenitiesDb LIMIT 3");
+      return rows;
+    } catch (error) {
+      console.error("Error in CustomerAmModel.getFeatured:", error);
+      throw error;
+    }
   }
 };
 
