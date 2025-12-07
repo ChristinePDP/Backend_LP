@@ -1,14 +1,28 @@
 import db from '../../config/db.js';
 
 const CustomerFeedbackModel = {
-  // 1. GET ALL REVIEWS (Fixed Syntax & using breakdown columns)
-  async getAll() {
-    const query = `SELECT id, customer_name, rating AS average, comment, date, rating_service AS service, rating_cleanliness AS cleanliness, rating_amenities AS amenities FROM FeedbackDb ORDER BY date DESC`;
-    const [rows] = await db.query(query);
-    return rows;
-  },
+  
+ async getAll(startDate, endDate) {
+    
+    let query = `SELECT id, customer_name, rating AS average, comment, date, rating_service AS service, rating_cleanliness AS cleanliness, rating_amenities AS amenities FROM FeedbackDb`;
+    
+    const params = [];
 
-  // 2. CREATE NEW REVIEW (Fixed Syntax & using breakdown columns)
+    
+    if (startDate && endDate && startDate !== 'undefined' && endDate !== 'undefined') {
+      
+      query += ` WHERE date BETWEEN ? AND ?`;
+      params.push(startDate, endDate);
+    }
+
+    
+    query += ` ORDER BY date DESC`;
+
+    const [rows] = await db.query(query, params);
+    return rows; 
+  },
+
+  
   async create(data) {
     const query = `INSERT INTO FeedbackDb (customer_name, rating, comment, date, rating_service, rating_cleanliness, rating_amenities) VALUES (?, ?, ?, NOW(), ?, ?, ?)`;
     
