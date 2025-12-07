@@ -88,6 +88,14 @@ const ReservationModel = {
     return rows;
   },
 
+  async extendCheckOutDate(reservation_id, new_check_out_date) {
+    const [result] = await db.query(
+      'UPDATE ReservationDb SET check_out_date = ? WHERE id = ?',
+      [new_check_out_date, reservation_id]
+    );
+    return result.affectedRows;
+  },
+
 };
 
 export default ReservationModel;
