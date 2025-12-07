@@ -58,6 +58,40 @@ const OwnerDashboardModel = {
             trend
         };
     },
+    
+    getTransactions: async (startDate, endDate) => {
+        const [rows] = await db.query(`
+            SELECT 
+                t.id,
+                t.transaction_ref, 
+                t.customer_name, 
+                t.booking_type, 
+                t.total_amount,
+                t.balance,
+                t.booking_status,
+                t.extension_history,
+                
+                -- Ito yung dating date (Fallback)
+                DATE_FORMAT(DATE_ADD(t.created_at, INTERVAL 8 HOUR), '%M %d, %Y %h:%i %p') as formatted_date,
+
+                -- 👇 ITO ANG KULANG: Kunin ang Check-in/Check-out mula sa ReservationDb
+                DATE_FORMAT(MIN(r.check_in_date), '%b %d, %Y %h:%i %p') as check_in_formatted,
+                DATE_FORMAT(MAX(r.check_out_date), '%b %d, %Y %h:%i %p') as check_out_formatted,
+                
+                GROUP_CONCAT(DISTINCT r.amenity_name SEPARATOR ', ') as amenities_summary
+
+            FROM TransactionDb t
+            LEFT JOIN ReservationDb r ON t.id = r.transaction_id
+            
+            WHERE DATE(DATE_ADD(t.created_at, INTERVAL 8 HOUR)) BETWEEN ? AND ?
+            
+            GROUP BY t.id
+            ORDER BY t.created_at DESC
+        `, [startDate, endDate]);
+        
+        return rows;
+    }
+
 };
 
 export default OwnerDashboardModel;
