@@ -21,6 +21,13 @@ const User = {
     return rows[0];
   },
 
+  // 👇 ITO ANG KULANG MO! (Importante ito sa Middleware)
+  async findById(id) {
+    const [rows] = await db.query('SELECT * FROM UserDb WHERE id = ?', [id]);
+    return rows[0];
+  },
+  // 👆 ------------------------------------------------
+
   // Find user by reset token
   async findByResetToken(token) {
     const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
