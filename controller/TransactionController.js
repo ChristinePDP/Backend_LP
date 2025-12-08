@@ -11,412 +11,327 @@ const generateTransactionRef = () => {
     return `TXN-${year}${month}${day}-${random}`;
 };
 
-// ✅ ADD THIS FUNCTION: Convert datetime-local to MySQL format
 const formatForMySQL = (datetimeString) => {
     if (!datetimeString) return null;
-    // Convert "2024-12-25T14:30" to "2024-12-25 14:30:00"
     return datetimeString.replace('T', ' ') + ':00';
 };
 
 const TransactionController = {
-    // Create new transaction with file upload
+    // 1. CREATE TRANSACTION
     async create(req, res) {
-    let connection;
-    
-    try {
-        connection = await db.getConnection();
-        await connection.beginTransaction();
-
-        console.log('📦 Request body:', req.body);
-        console.log('📄 Uploaded file:', req.file);
-        console.log('👤 User from auth:', req.user); // Check if user data is available
-
-        // Parse cart from JSON string
-        const cart = typeof req.body.cart === 'string' 
-            ? JSON.parse(req.body.cart) 
-            : req.body.cart;
-
-        const {
-            fullName,
-            contactNumber,
-            address,
-            checkInDate,
-            checkOutDate
-        } = req.body;
-
-        // ✅ GET USER ID FROM AUTH MIDDLEWARE
-        const user_id = req.user ? req.user.id : null;
-
-        // ✅ FIX: Convert datetime-local format to MySQL datetime format
-        const mysqlCheckInDate = formatForMySQL(checkInDate);
-        const mysqlCheckOutDate = formatForMySQL(checkOutDate);
-
-        console.log('🕒 Original checkInDate:', checkInDate);
-        console.log('🕒 MySQL format checkInDate:', mysqlCheckInDate);
-        console.log('🕒 Original checkOutDate:', checkOutDate);
-        console.log('🕒 MySQL format checkOutDate:', mysqlCheckOutDate);
-        console.log('👤 User ID for transaction:', user_id);
-
-        // Validate required fields
-        if (!fullName || !contactNumber || !address || !checkInDate || !checkOutDate) {
-            return res.status(400).json({
-                success: false,
-                message: 'All fields are required'
-            });
-        }
-
-        if (!cart || cart.length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'Cart cannot be empty'
-            });
-        }
-
-        // Calculate totals
-        const total_amount = cart.reduce((total, item) => 
-            total + (parseFloat(item.amenity_price) * parseInt(item.quantity)), 0);
-        const downpayment = total_amount * 0.2;
-        const balance = total_amount - downpayment;
-        const transaction_ref = generateTransactionRef();
-
-        // Get filename if file was uploaded
-        const proof_of_payment = req.file ? req.file.filename : null;
-
-        // ✅ UPDATE: Create transaction WITH user_id
-        const transactionId = await Transaction.create({
-            transaction_ref,
-            customer_name: fullName,
-            contact_number: contactNumber,
-            customer_address: address,
-            total_amount,
-            downpayment,
-            balance,
-            proof_of_payment,
-            user_id: user_id // ✅ ADD USER ID HERE
-        });
-
-        // Create reservations - ✅ USE THE FORMATTED DATES
-        const reservationsData = cart.map(item => ({
-            transaction_id: transactionId,
-            amenity_name: item.amenity_name,
-            quantity: item.quantity,
-            price: item.amenity_price,
-            check_in_date: mysqlCheckInDate,      // Use formatted date with time
-            check_out_date: mysqlCheckOutDate     // Use formatted date with time
-        }));
-
-        await Reservation.createMultiple(reservationsData);
-        await connection.commit();
-        
-        res.status(201).json({
-            success: true,
-            message: 'Transaction created successfully',
-            transaction_ref: transaction_ref,
-            transaction_id: transactionId,
-            total_amount: total_amount,
-            downpayment: downpayment
-        });
-
-    } catch (error) {
-        if (connection) await connection.rollback();
-        console.error('Transaction creation error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to create transaction',
-            error: error.message
-        });
-    } finally {
-        if (connection) connection.release();
-    }
-},
-
-    // Other methods remain the same...
-    async getAll(req, res) {
+        let connection;
         try {
-            const results = await Transaction.getAllWithReservations();
-            const formattedResults = results.map(row => ({
-                ...row,
-                reservations: row.reservations_json ? JSON.parse(`[${row.reservations_json}]`) : []
+            connection = await db.getConnection();
+            await connection.beginTransaction();
+
+            const cart = typeof req.body.cart === 'string' ? JSON.parse(req.body.cart) : req.body.cart;
+            const { fullName, contactNumber, address, checkInDate, checkOutDate, booking_type, paymentStatus, bookingStatus } = req.body;
+
+            const isWalkIn = booking_type === 'Walk-in';
+            const user_id = req.user ? req.user.id : (req.body.user_id || null);
+            
+            const mysqlCheckInDate = formatForMySQL(checkInDate);
+            const mysqlCheckOutDate = formatForMySQL(checkOutDate);
+
+            if (!fullName || !contactNumber || !address || !checkInDate || !checkOutDate) {
+                return res.status(400).json({ success: false, message: 'All fields are required' });
+            }
+            if (!cart || cart.length === 0) {
+                return res.status(400).json({ success: false, message: 'Cart cannot be empty' });
+            }
+
+            const calculatedTotal = cart.reduce((total, item) => total + (parseFloat(item.amenity_price) * parseInt(item.quantity)), 0);
+            
+            let finalTotalAmount = calculatedTotal;
+            let finalDownpayment = 0;
+            let finalBalance = 0;
+
+            if (isWalkIn) {
+                finalTotalAmount = calculatedTotal;
+                finalDownpayment = calculatedTotal; 
+                finalBalance = 0;
+            } else {
+                finalDownpayment = finalTotalAmount * 0.2;
+                finalBalance = finalTotalAmount - finalDownpayment;
+            }
+
+            const transaction_ref = generateTransactionRef();
+            const proof_of_payment = req.file ? req.file.path : null;
+            const finalPaymentStatus = paymentStatus || (isWalkIn ? 'Fully Paid' : 'Partial'); 
+            const finalBookingStatus = bookingStatus || (isWalkIn ? 'Confirmed' : 'Pending'); 
+
+            const transactionId = await Transaction.create({
+                transaction_ref,
+                customer_name: fullName,
+                contact_number: contactNumber,
+                customer_address: address,
+                total_amount: finalTotalAmount,
+                downpayment: finalDownpayment,
+                balance: finalBalance,
+                proof_of_payment,
+                user_id: user_id,
+                payment_status: finalPaymentStatus, 
+                booking_status: finalBookingStatus,
+                booking_type: booking_type || 'Online'
+            });
+
+            const reservationsData = cart.map(item => ({
+                transaction_id: transactionId,
+                amenity_name: item.amenity_name,
+                amenity_id: item.amenity_id || null, 
+                quantity: item.quantity,
+                price: item.amenity_price,
+                check_in_date: mysqlCheckInDate,
+                check_out_date: mysqlCheckOutDate
             }));
 
-            res.json({
+            await Reservation.createMultiple(reservationsData);
+            await connection.commit();
+            
+            res.status(201).json({
                 success: true,
-                data: formattedResults
+                message: isWalkIn ? 'Walk-in booking created successfully' : 'Transaction created successfully',
+                transaction_ref, 
+                transaction_id: transactionId, 
+                total_amount: finalTotalAmount, 
+                downpayment: finalDownpayment,
+                user_id
             });
 
         } catch (error) {
-            console.error('Get all transactions error:', error);
-            res.status(500).json({
-                success: false,
-                message: 'Failed to fetch transactions',
-                error: error.message
-            });
+            if (connection) await connection.rollback();
+            console.error('Transaction creation error:', error);
+            res.status(500).json({ success: false, message: 'Failed to create transaction', error: error.message });
+        } finally {
+            if (connection) connection.release();
         }
     },
 
+    // 2. GET ALL TRANSACTIONS
+    async getAll(req, res) {
+        try {
+            const results = await Transaction.getAllWithReservations();
+            const formattedResults = results.map(row => {
+                let extensions = [];
+                if (row.extension_history) {
+                    try { extensions = typeof row.extension_history === 'string' ? JSON.parse(row.extension_history) : row.extension_history; } catch (e) { extensions = []; }
+                }
+                return {
+                    ...row,
+                    reservations: row.reservations_json ? JSON.parse(`[${row.reservations_json}]`) : [],
+                    extensions: extensions
+                };
+            });
+            res.json({ success: true, data: formattedResults });
+        } catch (error) {
+            res.status(500).json({ success: false, message: 'Failed to fetch transactions', error: error.message });
+        }
+    },
+
+    // 3. GET TODAY'S BOOKINGS
+    async getTodaysBookings(req, res) {
+        try {
+            const results = await Transaction.getTodaysTransactions();
+            const formattedResults = results.map(row => {
+                let extensions = [];
+                if (row.extension_history) {
+                    try { extensions = typeof row.extension_history === 'string' ? JSON.parse(row.extension_history) : row.extension_history; } catch (e) { extensions = []; }
+                }
+                return {
+                    ...row,
+                    reservations: row.reservations_json ? JSON.parse(`[${row.reservations_json}]`) : [],
+                    extensions: extensions
+                };
+            });
+            res.json({ success: true, count: formattedResults.length, data: formattedResults });
+        } catch (error) {
+            res.status(500).json({ success: false, message: 'Failed to fetch today\'s transactions', error: error.message });
+        }
+    },
+
+    // 4. GET BY REFERENCE
     async getByRef(req, res) {
         try {
             const { transaction_ref } = req.params;
             const transaction = await Transaction.findByRef(transaction_ref);
-
-            if (!transaction) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Transaction not found'
-                });
-            }
+            if (!transaction) return res.status(404).json({ success: false, message: 'Transaction not found' });
 
             const reservations = await Reservation.findByTransactionId(transaction.id);
-            const transactionWithReservations = {
-                ...transaction,
-                reservations
-            };
-
-            res.json({
-                success: true,
-                data: transactionWithReservations
-            });
-
+            let extensions = [];
+            if (transaction.extension_history) {
+                try { extensions = typeof transaction.extension_history === 'string' ? JSON.parse(transaction.extension_history) : transaction.extension_history; } catch(e) { extensions = []; }
+            }
+            res.json({ success: true, data: { ...transaction, reservations, extensions } });
         } catch (error) {
-            console.error('Get transaction by ref error:', error);
-            res.status(500).json({
-                success: false,
-                message: 'Failed to fetch transaction',
-                error: error.message
-            });
+            res.status(500).json({ success: false, message: 'Failed to fetch transaction', error: error.message });
+        }
+    },
+
+    // 5. GET MY TRANSACTIONS
+    async getMyTransactions(req, res) {
+        try {
+            const userId = req.user?.id;
+            if (!userId) return res.status(401).json({ success: false, message: 'User not authenticated' });
+
+            const transactions = await Transaction.findByUserId(userId);
+            const transactionsWithReservations = await Promise.all(
+                transactions.map(async (transaction) => {
+                    const reservations = await Reservation.findByTransactionId(transaction.id);
+                    return { ...transaction, reservations: reservations || [] };
+                })
+            );
+            res.json({ success: true, data: transactionsWithReservations });
+        } catch (error) {
+            res.status(500).json({ success: false, message: 'Failed to fetch your transactions', error: error.message });
         }
     },
 
     async getByCustomer(req, res) {
-    try {
-        const { customer_name, contact_number } = req.query;
-        
-        if (!customer_name || !contact_number) {
-            return res.status(400).json({
-                success: false,
-                message: 'Customer name and contact number are required'
-            });
+        try {
+            const { customer_name, contact_number } = req.query;
+            if (!customer_name || !contact_number) return res.status(400).json({ success: false, message: 'Customer name and contact number required' });
+            
+            const transactions = await Transaction.findByCustomer(customer_name.trim(), contact_number.trim());
+            const transactionsWithReservations = await Promise.all(
+                transactions.map(async (transaction) => {
+                    const reservations = await Reservation.findByTransactionId(transaction.id);
+                    return { ...transaction, reservations: reservations || [] };
+                })
+            );
+            res.json({ success: true, data: transactionsWithReservations });
+        } catch (error) {
+            res.status(500).json({ success: false, message: 'Failed to fetch transactions', error: error.message });
         }
+    },
 
-        // Add validation to ensure exact matching
-        const transactions = await Transaction.findByCustomer(
-            customer_name.trim(), 
-            contact_number.trim()
-        );
+    async getByUserId(req, res) {
+        try {
+            const { userId } = req.params;
+            if (!userId) return res.status(400).json({ success: false, message: "User ID is required" });
 
-        console.log('🔍 Search params:', { customer_name, contact_number });
-        console.log('📊 Found transactions:', transactions.length);
+            const transactions = await Transaction.findByUserId(userId);
+            const transactionsWithReservations = await Promise.all(
+                transactions.map(async (transaction) => {
+                    const reservations = await Reservation.findByTransactionId(transaction.id);
+                    return { ...transaction, reservations: reservations || [] };
+                })
+            );
+            res.json({ success: true, data: transactionsWithReservations });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    },
 
-        const transactionsWithReservations = await Promise.all(
-            transactions.map(async (transaction) => {
-                const reservations = await Reservation.findByTransactionId(transaction.id);
-                return {
-                    ...transaction,
-                    reservations
-                };
-            })
-        );
-
-        res.json({
-            success: true,
-            data: transactionsWithReservations
-        });
-
-    } catch (error) {
-        console.error('Get transactions by customer error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch transactions',
-            error: error.message
-        });
-    }
-},
-
+    // 6. UPDATE STATUS
     async updateStatus(req, res) {
         let connection;
-        
         try {
             connection = await db.getConnection();
             await connection.beginTransaction();
             
             const { transaction_id } = req.params;
             const { booking_status } = req.body;
-
-            const validStatuses = ['Pending', 'Confirmed', 'Cancelled', 'Completed'];
+            const validStatuses = ['Pending', 'Confirmed', 'Cancelled', 'Completed', 'Checked-In', 'Checked-Out'];
+            
             if (!validStatuses.includes(booking_status)) {
                 await connection.rollback();
-                return res.status(400).json({
-                    success: false,
-                    message: 'Invalid status. Must be: Pending, Confirmed, Cancelled, or Completed'
-                });
+                return res.status(400).json({ success: false, message: 'Invalid status' });
             }
 
             const transaction = await Transaction.findById(transaction_id);
             if (!transaction) {
                 await connection.rollback();
-                return res.status(404).json({
-                    success: false,
-                    message: 'Transaction not found'
-                });
+                return res.status(404).json({ success: false, message: 'Transaction not found' });
             }
 
-            await Transaction.updateStatus(transaction_id, booking_status);
+            if (booking_status === 'Checked-In') {
+                await Transaction.checkIn(transaction_id);
+            } else {
+                await Transaction.updateStatus(transaction_id, booking_status);
+            }
+
             await Reservation.updateStatusByTransaction(transaction_id, booking_status);
             await connection.commit();
 
-            res.json({
-                success: true,
-                message: `Transaction ${booking_status.toLowerCase()} successfully`
-            });
+            res.json({ success: true, message: `Transaction updated to ${booking_status} successfully` });
 
         } catch (error) {
             if (connection) await connection.rollback();
-            console.error('Update transaction status error:', error);
-            res.status(500).json({
-                success: false,
-                message: 'Failed to update transaction status',
-                error: error.message
-            });
+            res.status(500).json({ success: false, message: 'Failed to update status', error: error.message });
         } finally {
             if (connection) connection.release();
         }
     },
 
+    // 7. CANCEL TRANSACTION
     async cancel(req, res) {
         let connection;
-        
         try {
             connection = await db.getConnection();
             await connection.beginTransaction();
-            
             const { transaction_id } = req.params;
+            
             const transaction = await Transaction.findById(transaction_id);
-
             if (!transaction) {
                 await connection.rollback();
-                return res.status(404).json({
-                    success: false,
-                    message: 'Transaction not found'
-                });
+                return res.status(404).json({ success: false, message: 'Transaction not found' });
             }
-
+            
             await Transaction.cancel(transaction_id);
             await Reservation.cancelByTransaction(transaction_id);
             await connection.commit();
-
-            res.json({
-                success: true,
-                message: 'Transaction cancelled successfully'
-            });
-
+            
+            res.json({ success: true, message: 'Transaction cancelled successfully' });
         } catch (error) {
             if (connection) await connection.rollback();
-            console.error('Cancel transaction error:', error);
-            res.status(500).json({
-                success: false,
-                message: 'Failed to cancel transaction',
-                error: error.message
-            });
+            res.status(500).json({ success: false, message: 'Failed to cancel transaction', error: error.message });
         } finally {
             if (connection) connection.release();
         }
     },
 
+    // 8. UPDATE PAYMENT STATUS
     async updatePaymentStatus(req, res) {
         try {
             const { transaction_id } = req.params;
             const { payment_status } = req.body;
-
             const validStatuses = ['Partial', 'Fully Paid'];
-            if (!validStatuses.includes(payment_status)) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Invalid payment status. Must be: Partial or Fully Paid'
-                });
-            }
+            if (!validStatuses.includes(payment_status)) return res.status(400).json({ success: false, message: 'Invalid payment status' });
 
-            await db.query(
-                'UPDATE TransactionDb SET payment_status = ? WHERE id = ?',
-                [payment_status, transaction_id]
-            );
+            const transaction = await Transaction.findById(transaction_id);
+            if (!transaction) return res.status(404).json({ success: false, message: 'Transaction not found' });
 
-            res.json({
-                success: true,
-                message: `Payment status updated to ${payment_status}`
-            });
-
+            await db.query('UPDATE TransactionDb SET payment_status = ? WHERE id = ?', [payment_status, transaction_id]);
+            res.json({ success: true, message: `Payment status updated to ${payment_status}` });
         } catch (error) {
-            console.error('Update payment status error:', error);
-            res.status(500).json({
-                success: false,
-                message: 'Failed to update payment status',
-                error: error.message
-            });
+            res.status(500).json({ success: false, message: 'Failed to update payment status', error: error.message });
         }
-    }, 
+    },
 
-    // Get transactions by logged-in user
-async getMyTransactions(req, res) {
-    try {
-        // Assuming you have user authentication middleware that adds user to req
-        const userId = req.user.id; // Or however you store logged-in user info
-        
-        if (!userId) {
-            return res.status(401).json({
-                success: false,
-                message: 'User not authenticated'
-            });
+    // 9. UPDATE TOTAL
+    async updateTransactionTotal(req, res) {
+        let connection;
+        try {
+            connection = await db.getConnection();
+            await connection.beginTransaction();
+            const { transaction_id } = req.params;
+            const { total_amount, balance } = req.body;
+            
+            if (typeof total_amount === 'undefined' || typeof balance === 'undefined') {
+                await connection.rollback();
+                return res.status(400).json({ success: false, message: 'total_amount and balance are required' });
+            }
+            
+            await db.query('UPDATE TransactionDb SET total_amount = ?, balance = ? WHERE id = ?', [total_amount, balance, transaction_id]);
+            await connection.commit();
+            res.json({ success: true, message: 'Transaction updated successfully' });
+        } catch (error) {
+            if (connection) await connection.rollback();
+            res.status(500).json({ success: false, message: 'Failed to update transaction', error: error.message });
+        } finally {
+            if (connection) connection.release();
         }
-
-        // First, get user details from your Users table
-        const [users] = await db.query(
-            'SELECT full_name, contact_number FROM Users WHERE id = ?',
-            [userId]
-        );
-
-        if (users.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'User not found'
-            });
-        }
-
-        const user = users[0];
-
-        // Then get transactions using user's details
-        const transactions = await Transaction.findByCustomer(
-            user.full_name, 
-            user.contact_number
-        );
-
-        const transactionsWithReservations = await Promise.all(
-            transactions.map(async (transaction) => {
-                const reservations = await Reservation.findByTransactionId(transaction.id);
-                return {
-                    ...transaction,
-                    reservations
-                };
-            })
-        );
-
-        res.json({
-            success: true,
-            data: transactionsWithReservations
-        });
-
-    } catch (error) {
-        console.error('Get my transactions error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch your transactions',
-            error: error.message
-        });
     }
-}
-    
-    
-
-    
 };
 
 export default TransactionController;
