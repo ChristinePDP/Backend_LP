@@ -69,15 +69,20 @@ const OwnerAmenityController = {
     },
 
     update: async (req, res) => {
-        try {
-            const { id } = req.params;
-            const { name, type, description, capacity, price, status, quantity } = req.body;
-            const available = (status === 'available' || status === 'true') ? 'Yes' : 'No';
+        try {
+            console.log('=== UPDATE OWNER AMENITY ===');
+            console.log('Request params:', req.params);
+            console.log('Request body:', req.body);
+            console.log('Request file:', req.file);
+            
+            const { id } = req.params;
+            const { name, type, description, capacity, price, status, quantity } = req.body;
+            const available = (status === 'available' || status === 'true') ? 'Yes' : 'No';
             
             // Gumawa ng object na may lahat ng data para mas simple
             const updateData = {
                 name, 
-                type: type || 'kubo', // Re-use the default type just in case
+                type: type || 'kubo', // Re-use default type just in case
                 description, 
                 capacity, 
                 price, 
@@ -85,33 +90,58 @@ const OwnerAmenityController = {
                 quantity: quantity || 0
             };
             
-            if (req.file) {
-                // Kung may bagong file, idagdag ang image path sa updateData
+            console.log('Update data before file:', updateData);
+            
+            if (req.file) {
+                // Kung may bagong file, idagdag ang image path sa updateData
                 updateData.image = req.file.path;
-            } 
+                console.log('Update data with file:', updateData);
+            }
+            
+            console.log('Final update data:', updateData);
             
             // Tawagin ang model isang beses lang
-            await OwnerAmenityModel.update(id, updateData);
-            
-            res.json({ message: 'Updated successfully' });
-        } catch (err) { 
-            console.error("Update Amenity Error:", err); // Mas detalyadong log
-            // Ito ang nagpapakita ng alert: "Error saving amenity: Error updating amenity"
-            res.status(500).json({ message: 'Error updating amenity' }); 
-        }
-    },
+            await OwnerAmenityModel.update(id, updateData);
+            console.log('Update completed for ID:', id);
+            
+            const response = { message: 'Updated successfully', updatedData: updateData };
+            console.log('Final response:', response);
+            console.log('=== END UPDATE OWNER AMENITY ===');
+            
+            res.json(response);
+        } catch (err) { 
+            console.error("Update Amenity Error:", err);
+            console.error("Error stack:", err.stack);
+            console.error("Request params that caused error:", req.params);
+            console.error("Request body that caused error:", req.body);
+            console.error("Request file that caused error:", req.file);
+            res.status(500).json({ message: 'Error updating amenity' }); 
+        }
+    },
 
     delete: async (req, res) => {
         try {
+            console.log('=== DELETE OWNER AMENITY ===');
+            console.log('Request params:', req.params);
+            
             const { id } = req.params;
+            console.log('Deleting amenity with ID:', id);
+            
             await OwnerAmenityModel.delete(id);
-            res.json({ message: 'Deleted successfully' });
+            console.log('Successfully deleted amenity ID:', id);
+            
+            const response = { message: 'Deleted successfully', deletedId: id };
+            console.log('Final response:', response);
+            console.log('=== END DELETE OWNER AMENITY ===');
+            
+            res.json(response);
         } catch (err) { 
-            console.error(err);
+            console.error('Error deleting amenity:', err);
+            console.error('Error stack:', err.stack);
+            console.error('Request params that caused error:', req.params);
             res.status(500).json({ message: 'Error deleting amenity' }); 
         }
     }
-
 };
 
 export default OwnerAmenityController;
