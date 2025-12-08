@@ -74,6 +74,15 @@ const TransactionModel = {
     return rows[0];
   },
 
+  // ✅ RETAINED FROM OLD CODE (Para sa Customer Booking History)
+  async findByUserId(userId) {
+    const [rows] = await db.query(
+      'SELECT * FROM TransactionDb WHERE user_id = ? ORDER BY created_at DESC',
+      [userId]
+    );
+    return rows;
+  },
+  
   // Update booking status
   async updateStatus(id, booking_status) {
     await db.query(
