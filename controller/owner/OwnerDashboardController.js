@@ -1,62 +1,52 @@
 import OwnerDashboardModel from '../../models/owner/OwnerDashboardModel.js';
+import { Parser } from 'json2csv'; 
 
 const OwnerDashboardController = {
-    getStats: async (req, res) => {
+    
+    getAnalyticsData: async (req, res) => {
         try {
-            const data = await OwnerDashboardModel.getStats();
-            res.json({
-                totalRevenue: data.salesStats.totalRevenue,
-                totalTransactions: data.salesStats.totalTransactions,
-                totalFeedback: data.feedbackStats.totalFeedback,
-                salesByService: data.salesByService,
-                feedbackDistribution: data.feedbackDist
+            const { startDate, endDate } = req.query;
+            
+            // Default to today if no date provided
+            const start = startDate || new Date().toISOString().split('T')[0];
+            const end = endDate || new Date().toISOString().split('T')[0];
+
+            const [analytics, transactions] = await Promise.all([
+                OwnerDashboardModel.getAnalytics(start, end),
+                OwnerDashboardModel.getTransactions(start, end)
+            ]);
+
+            res.json({ 
+                success: true, 
+                analytics, 
+                transactions 
             });
-        } catch (err) { 
-            console.error("Dashboard Stats Error:", err);
-            res.status(500).json({ totalRevenue: 0, totalTransactions: 0, totalFeedback: 0, salesByService: [], feedbackDistribution: [] }); 
-        }
-    },
-    
-    getSales: async (req, res) => {
-        try {
-            const { year, month, filterType } = req.query;
-            const chartData = await OwnerDashboardModel.getSalesForChart(year, month, filterType);
-            const serviceData = await OwnerDashboardModel.getSalesByService(year, month, filterType);
-            const stats = await OwnerDashboardModel.getSalesStatsBoxes(); 
-            const recentSales = await OwnerDashboardModel.getRecentSales(); 
-
-            res.json({ chartData, serviceData, stats, recentSales });
-        } catch (err) { 
-            console.error("Sales Charts Controller Error:", err);
-            res.status(500).json({ message: 'Error fetching sales charts and stats' }); 
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ message: "Server Error" });
         }
     },
 
-    getSalesHistory: async (req, res) => {
+    exportData: async (req, res) => {
         try {
-            const { startDate, endDate, category, paymentMethod } = req.query;
-            const history = await OwnerDashboardModel.getSalesHistory(startDate, endDate, category, paymentMethod);
-            res.json(history);
-        } catch (err) {
-            console.error("Sales History Controller Error:", err);
-            res.status(500).json([]);
-        }
-    },
-    
-    getYears: async (req, res) => {
-        try { 
-            const years = await OwnerDashboardModel.getYears(); 
-            res.json(years); 
-        } catch (err) { res.status(500).json([]); }
-    },
+            const { startDate, endDate } = req.query;
+            const transactions = await OwnerDashboardModel.getTransactions(startDate, endDate);
 
-    getFeedback: async (req, res) => {
-        try {
-            const { startDate, endDate, filter } = req.query;
-            const feedback = await OwnerDashboardModel.getFeedback(startDate, endDate, filter);
-            res.json({ feedback });
-        } catch (err) { res.status(500).json({ feedback: [] }); }
-    },
+            if (transactions.length === 0) return res.status(404).send("No data");
+
+            const fields = ['transaction_ref', 'formatted_date', 'customer_name', 'booking_type', 'booking_status', 'total_amount', 'downpayment', 'balance', 'amenities_summary'];
+            const parser = new Parser({ fields });
+            const csv = parser.parse(transactions);
+
+            res.header('Content-Type', 'text/csv');
+            res.attachment(`Sales_Report_${startDate}_to_${endDate}.csv`);
+            return res.send(csv);
+
+        } catch (error) {
+            console.error(error);
+            res.status(500).send("Export Error");
+        }
+    }
 };
 
 export default OwnerDashboardController;
