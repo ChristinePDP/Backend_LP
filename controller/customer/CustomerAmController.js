@@ -31,6 +31,18 @@ const CustomerAmController = {
       res.status(500).json({ error: 'Failed to fetch amenity details' });
     }
   },
+
+  // 3. Get Featured Amenities
+  getFeatured: async (req, res) => {
+    try {
+      const amenities = await CustomerAmModel.getFeatured();
+      const formatted = amenities.map(amenity => CustomerAmModel.formatAmenity(amenity));
+      res.json(formatted);
+    } catch (error) {
+      console.error('Error fetching featured amenities:', error);
+      res.status(500).json({ error: 'Failed to fetch featured amenities' });
+    }
+  }
 };
 
 export default CustomerAmController;
