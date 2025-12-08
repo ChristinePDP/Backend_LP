@@ -1,17 +1,6 @@
 import db from '../config/db.js';
 
-const generateTransactionRef = () => {
-  const date = new Date();
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const random = Math.random().toString(36).substring(2, 6).toUpperCase();
-  return `TXN-${year}${month}${day}-${random}`;
-};
-
-
 const TransactionModel = {
-  // Create new transaction - FIXED
   // 1. CREATE TRANSACTION (Combined Fields)
   async create(transactionData) {
     const {
@@ -56,7 +45,14 @@ const TransactionModel = {
     return result.insertId;
   },
 
-  // Find by transaction reference
+  async findByCustomer(customer_name, contact_number) {
+    const [rows] = await db.query(
+      'SELECT * FROM TransactionDb WHERE customer_name = ? AND contact_number = ? ORDER BY created_at DESC',
+      [customer_name, contact_number]
+    );
+    return rows;
+  },
+
   async findByRef(transaction_ref) {
     const [rows] = await db.query(
       'SELECT * FROM TransactionDb WHERE transaction_ref = ?',
@@ -65,7 +61,6 @@ const TransactionModel = {
     return rows[0];
   },
 
-  // Find by ID
   async findById(id) {
     const [rows] = await db.query(
       'SELECT * FROM TransactionDb WHERE id = ?',
@@ -83,14 +78,13 @@ const TransactionModel = {
     return rows;
   },
 
-  // Update booking status
+  // Normal Status Update (Confirmed, Cancelled, Completed)
   async updateStatus(id, booking_status) {
     await db.query(
       'UPDATE TransactionDb SET booking_status = ? WHERE id = ?',
       [booking_status, id]
     );
   },
-
 
   // =========================================================
   // 2. OWNER DASHBOARD FEATURES (From New Code)
@@ -110,7 +104,6 @@ const TransactionModel = {
     return result;
   },
 
-  // Cancel transaction
   async cancel(id) {
     await db.query(
       'UPDATE TransactionDb SET booking_status = "Cancelled" WHERE id = ?',
@@ -118,10 +111,12 @@ const TransactionModel = {
     );
   },
 
-  // Get all transactions with reservations
+  // Get All with Reservations (Detailed for Dashboard)
   async getAllWithReservations() {
     const [rows] = await db.query(`
       SELECT t.*, 
+        t.created_at as created_at_ph,
+        t.extension_history, 
         GROUP_CONCAT(
           JSON_OBJECT(
             'id', r.id,
@@ -139,6 +134,58 @@ const TransactionModel = {
       ORDER BY t.created_at DESC
     `);
     return rows;
+  },
+
+  // Get Today's Transactions (For Task List)
+  async getTodaysTransactions() {
+    const [rows] = await db.query(`
+      SELECT t.*, 
+        t.created_at as created_at_ph,
+        t.extension_history, 
+        GROUP_CONCAT(
+          JSON_OBJECT(
+            'id', r.id,
+            'amenity_name', r.amenity_name,
+            'quantity', r.quantity,
+            'price', r.price,
+            'check_in_date', r.check_in_date,
+            'check_out_date', r.check_out_date,
+            'status', r.status
+          )
+        ) as reservations_json
+      FROM TransactionDb t
+      LEFT JOIN ReservationDb r ON t.id = r.transaction_id
+      WHERE DATE(t.created_at) = DATE(DATE_ADD(NOW(), INTERVAL 8 HOUR))
+      GROUP BY t.id 
+      ORDER BY t.created_at DESC
+    `);
+    return rows;
+  },
+
+  // 👇 CORRECTED EXTENSION LOGIC
+  async addExtension(id, extensionData, cost) {
+    // 1. Get history
+    const [rows] = await db.query('SELECT extension_history FROM TransactionDb WHERE id = ?', [id]);
+    
+    let currentHistory = rows[0]?.extension_history || [];
+    
+    // Safety check for JSON parsing
+    if (typeof currentHistory === 'string') {
+        try { currentHistory = JSON.parse(currentHistory); } catch(e) { currentHistory = []; }
+    }
+    if (!Array.isArray(currentHistory)) currentHistory = [];
+
+    // 2. Add new extension record
+    currentHistory.push(extensionData);
+
+    // 3. Update DB
+    await db.query(
+      `UPDATE TransactionDb 
+       SET extension_history = ?, 
+           total_amount = total_amount + ?
+       WHERE id = ?`,
+      [JSON.stringify(currentHistory), cost, id]
+    );
   }
 };
 
