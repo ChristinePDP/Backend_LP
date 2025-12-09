@@ -13,9 +13,12 @@ router.post('/',
 
 router.get('/', protect, TransactionController.getAll);
 router.get('/customer', TransactionController.getByCustomer);
+router.get('/today', TransactionController.getTodaysBookings);
 router.get('/:transaction_ref', TransactionController.getByRef);
+router.get('/user/:userId', TransactionController.getByUserId);
 router.put('/:transaction_id/status', TransactionController.updateStatus);
 router.put('/:transaction_id/payment-status', TransactionController.updatePaymentStatus);
 router.put('/:transaction_id/cancel', TransactionController.cancel);
+router.put('/:transaction_id/update-total', TransactionController.updateTransactionTotal);
 
 export default router;
