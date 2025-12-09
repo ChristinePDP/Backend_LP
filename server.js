@@ -12,12 +12,50 @@ import CustomerFeedbackRoutes from "./routers/customer/CustomerFeedbackRoutes.js
 
 const app = express();
 
+function validateRouteFile(routeName, router) {
+    const routerStack = router.stack || router._router?.stack || [];
+    
+    routerStack.forEach((layer) => {
+        if (layer.route) {
+            const path = layer.route.path;
+            if (path.includes(':*') || path.includes('::')) {
+                console.error(`❌ INVALID ROUTE FOUND: ${path}`);
+                console.error(`   File: ${routeName}`);
+                throw new Error(`Invalid route syntax in ${routeName}: ${path}`);
+            }
+        }
+    });
+}
+
+
+
 let corsOptions = {
     origin: process.env.ORIGIN || "http://localhost:5173",
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"]
 }
+
+try {
+    validateRouteFile('UserRoutes (Auth)', UserRoutes);
+    validateRouteFile('CustomerAmRoutes', CustomerAmRoutes);
+    validateRouteFile('CustomerFeedbackRoutes', CustomerFeedbackRoutes);
+    validateRouteFile('OwnerAmenityRoutes', OwnerAmenityRoutes);
+    validateRouteFile('ownerDashboardRoutes', ownerDashboardRoutes);
+    
+    // ❌ REMOVED THIS LINE CAUSING THE CRASH:
+    // validateRouteFile('userRoutes (Owner Manage)', userRoutes); 
+    
+    validateRouteFile('transactionRoutes', transactionRoutes);
+    validateRouteFile('reservationRoutes', reservationRoutes);
+} catch (error) {
+    console.error('\n❌ ROUTE VALIDATION ERROR:');
+    console.error(error.message);
+    process.exit(1); 
+}
+
+
+
 
 app.use(express.json());
 app.use(cors(corsOptions));
