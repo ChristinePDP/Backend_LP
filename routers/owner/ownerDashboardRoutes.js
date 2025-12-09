@@ -2,15 +2,10 @@ import express from 'express';
 const router = express.Router();
 import OwnerDashboardController from '../../controller/owner/OwnerDashboardController.js';
 
-// Stats
-router.get('/dashboard/stats', OwnerDashboardController.getStats);
+import { protect, authorize } from '../../middleware/authMiddleware.js'; 
 
-// Sales
-router.get('/sales', OwnerDashboardController.getSales); 
-router.get('/sales/history', OwnerDashboardController.getSalesHistory);
-router.get('/sales/years', OwnerDashboardController.getYears);
+router.get('/analytics', protect, authorize('owner'), OwnerDashboardController.getAnalyticsData); 
 
-// Feedback
-router.get('/feedback', OwnerDashboardController.getFeedback);
+router.get('/export', protect, authorize('owner'), OwnerDashboardController.exportData);
 
 export default router;
