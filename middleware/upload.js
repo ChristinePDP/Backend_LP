@@ -1,49 +1,30 @@
+import { v2 as cloudinary } from 'cloudinary';
+import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
+import 'dotenv/config';
 
-// Ensure upload directory exists
-const uploadDir = 'uploads/payments/';
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// Configure storage
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, uploadDir);
-    },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const extension = path.extname(file.originalname);
-        const fileName = 'payment-' + uniqueSuffix + extension;
-        cb(null, fileName);
-    }
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// File filter
-const fileFilter = (req, file, cb) => {
-    const allowedMimes = [
-        'image/jpeg',
-        'image/jpg', 
-        'image/png',
-        'image/gif',
-        'image/webp'
-    ];
-
-    if (allowedMimes.includes(file.mimetype)) {
-        cb(null, true);
-    } else {
-        cb(new Error('Invalid file type. Only images are allowed.'), false);
-    }
-};
-
-const upload = multer({
-    storage: storage,
-    fileFilter: fileFilter,
-    limits: {
-        fileSize: 5 * 1024 * 1024 // 5MB
-    }
+const amenitiesStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'la_piscina_amenities', 
+    allowed_formats: ['jpg', 'png', 'jpeg', 'webp'],
+  },
 });
 
-export default upload;
+export const uploadAmenities = multer({ storage: amenitiesStorage });
+
+const paymentStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'la_piscina_payments', 
+    allowed_formats: ['jpg', 'png', 'jpeg'], 
+  },
+});
+
+export const uploadPayment = multer({ storage: paymentStorage });
