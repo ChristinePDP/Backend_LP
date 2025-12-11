@@ -23,7 +23,7 @@ const CustomerAmModel = {
     }
   },
 
-  // GET single amenity by ID
+  
   async getById(id) {
     const query = `
       SELECT a.*, 

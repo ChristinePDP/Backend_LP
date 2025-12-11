@@ -91,6 +91,7 @@ const OwnerDashboardModel = {
         
         return rows;
     }
+
 };
 
 export default OwnerDashboardModel;

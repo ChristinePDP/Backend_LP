@@ -107,6 +107,7 @@ const ReservationModel = {
     );
     return result.affectedRows;
   }
+
 };
 
 export default ReservationModel;
