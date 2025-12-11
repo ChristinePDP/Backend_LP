@@ -1,7 +1,7 @@
 import db from '../config/db.js';
 
 const ReservationModel = {
-  // 1. STANDARD CRUD (From Old & New)
+  // 1. STANDARD CRUD
   async create(reservationData) {
     const {
       transaction_id,
@@ -58,16 +58,14 @@ const ReservationModel = {
   },
 
   // =========================================================
-  // 2. DASHBOARD / TASK LIST FEATURES (From New Code)
+  // 2. DASHBOARD / TASK LIST FEATURES
   // =========================================================
 
-  // 👇 CHECK-INS TODAY (PH Time Logic)
   async getTodaysCheckIns() {
     const [rows] = await db.query(
       `SELECT r.*, t.customer_name, t.contact_number 
        FROM ReservationDb r
        JOIN TransactionDb t ON r.transaction_id = t.id
-       -- Compare Check-in Date vs PH Date Today
        WHERE DATE(r.check_in_date) = DATE(DATE_ADD(NOW(), INTERVAL 8 HOUR))
        AND r.status != 'Cancelled'
        ORDER BY r.check_in_date ASC`
@@ -75,7 +73,6 @@ const ReservationModel = {
     return rows;
   },
 
-  // 👇 CHECK-OUTS TODAY (PH Time Logic)
   async getTodaysCheckOuts() {
     const [rows] = await db.query(
       `SELECT r.*, t.customer_name, t.contact_number 
@@ -88,7 +85,6 @@ const ReservationModel = {
     return rows;
   },
 
-  // 👇 NEW: Extend check-out date
   async extendCheckOutDate(reservation_id, new_check_out_date) {
     const [result] = await db.query(
       'UPDATE ReservationDb SET check_out_date = ? WHERE id = ?',
@@ -97,7 +93,6 @@ const ReservationModel = {
     return result.affectedRows;
   },
 
-  // 👇 NEW: Update payment status to Fully Paid when balance is 0
   async updatePaymentToFullyPaid(transaction_id) {
     const [result] = await db.query(
       `UPDATE TransactionDb 
@@ -106,6 +101,43 @@ const ReservationModel = {
       [transaction_id]
     );
     return result.affectedRows;
+  },
+
+  // ============================================================
+  // 👇 BAGONG FUNCTION: CHECK AVAILABILITY (INVENTORY LOCKING)
+  // ============================================================
+  async checkAvailability(amenity_name, check_in, check_out) {
+    // 1. Kunin ang Total Limit ng Amenity (e.g., 2 units)
+    const [amenity] = await db.query('SELECT quantity FROM AmenitiesDb WHERE name = ?', [amenity_name]);
+    
+    if (amenity.length === 0) {
+        return { error: `Amenity '${amenity_name}' not found in database` };
+    }
+    
+    const maxLimit = amenity[0].quantity;
+
+    // 2. Bilangin ang existing reservations na tumatama sa dates na ito
+    // Logic: Active Status + Date Overlap
+    const [usage] = await db.query(`
+      SELECT COALESCE(SUM(quantity), 0) as booked_count 
+      FROM ReservationDb 
+      WHERE amenity_name = ? 
+      AND status IN ('Confirmed', 'Pending', 'Checked-In')
+      AND NOT (
+        check_out_date <= ? OR  -- Tapos na bago dumating
+        check_in_date >= ?      -- Darating pa lang pagkaalis nila
+      )
+    `, [amenity_name, check_in, check_out]);
+
+    const bookedCount = parseInt(usage[0].booked_count || 0);
+    const remaining = maxLimit - bookedCount;
+
+    return { 
+        total: maxLimit,
+        used: bookedCount,
+        remaining: remaining, // Ito ang iche-check natin
+        isFull: remaining <= 0
+    };
   }
 
 };

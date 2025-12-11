@@ -1,25 +1,56 @@
 import db from '../../config/db.js';
 
 const OwnerAmenityModel = {
-    getAll: async () => {
-        const query = `
-            SELECT 
-                a.*, 
-                -- CRITICAL FIX: Count reservations that are active today or confirmed for today/future
-                (SELECT COUNT(b.id) 
-                 FROM ReservationDb b 
-                 WHERE b.amenity_id = a.id 
-                 AND b.status IN ('Confirmed', 'Checked-In')
-                 -- Check if the booking period spans the current date (CURDATE())
-                 AND DATE(b.check_in_date) <= CURDATE()
-                 AND DATE(b.check_out_date) >= CURDATE()
-                ) as booked
-            FROM AmenitiesDb a 
-            ORDER BY a.id DESC
-        `;
+    // 1. GET ALL (Updated Logic: Default to Available if no date selected)
+    getAll: async (checkIn = null, checkOut = null) => {
+        let query;
+
+        // SCENARIO A: KAPAG MAY DATE NA PINILI ANG USER
+        // Dito lang tayo maghihigpit at magbibilang ng bookings.
+        if (checkIn && checkOut) {
+            query = `
+                SELECT 
+                    a.*, 
+                    (SELECT COALESCE(SUM(b.quantity), 0)
+                     FROM ReservationDb b 
+                     WHERE b.amenity_name = a.name 
+                     AND b.status IN ('Confirmed', 'Checked-In', 'Pending')
+                     -- Check Overlap Logic
+                     AND NOT (
+                        b.check_out_date <= '${checkIn}' OR 
+                        b.check_in_date >= '${checkOut}'
+                     )
+                    ) as booked_count
+                FROM AmenitiesDb a 
+                ORDER BY a.id DESC
+            `;
+        } 
+        // SCENARIO B: KAPAG WALA PANG DATE (Initial Load / Catalog View)
+        // I-set natin ang booked_count sa 0 para maging "Available" lahat sa simula.
+        else {
+            query = `
+                SELECT 
+                    a.*, 
+                    0 as booked_count 
+                FROM AmenitiesDb a 
+                ORDER BY a.id DESC
+            `;
+        }
 
         const [rows] = await db.query(query);
-        return rows;
+
+        return rows.map(amenity => {
+            const remaining = amenity.quantity - amenity.booked_count;
+            
+            return {
+                ...amenity,
+                // Ito ang logic: 
+                // Kung wala pang date, 'booked_count' ay 0, so 'remaining' = 'quantity'. (Available)
+                // Kung may date na, babawas na ang reservations.
+                slots_left: remaining > 0 ? remaining : 0,
+                real_time_status: remaining <= 0 ? 'FULL' : 'AVAILABLE'
+            };
+        });
     },
 
     getById: async (id) => {
@@ -29,7 +60,6 @@ const OwnerAmenityModel = {
 
     create: async (data) => {
         const { image, name, type, description, capacity, price, available, quantity } = data;
-        // NOTE: available status is calculated on the frontend, let's store it as boolean/int.
         return await db.query(
             'INSERT INTO AmenitiesDb (image, name, type, description, capacity, price, available, quantity) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
             [image, name, type, description, capacity, price, available, quantity]
@@ -38,7 +68,6 @@ const OwnerAmenityModel = {
 
     update: async (id, data) => {
         const { name, description, price, type, available, capacity, quantity, image } = data;
-        // Use COALESCE in SQL to handle conditional updates cleanly if the field is not in the form
         let updateQuery = 'UPDATE AmenitiesDb SET name=?, description=?, price=?, type=?, available=?, capacity=?, quantity=?';
         const params = [name, description, price, type, available, capacity, quantity];
         
@@ -56,7 +85,6 @@ const OwnerAmenityModel = {
     delete: async (id) => {
         return await db.query('DELETE FROM AmenitiesDb WHERE id = ?', [id]);
     }
-
 };
 
 export default OwnerAmenityModel;

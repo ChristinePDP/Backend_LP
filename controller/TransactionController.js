@@ -1,5 +1,7 @@
 import Transaction from '../models/TransactionModel.js';
 import Reservation from '../models/ReservationModel.js';
+// 👇 IMPORTANTE: Idagdag ito para gumana ang date checking
+import OwnerAmenityModel from '../models/owner/OwnerAmenityModel.js'; 
 import db from '../config/db.js';
 
 const generateTransactionRef = () => {
@@ -17,25 +19,36 @@ const formatForMySQL = (datetimeString) => {
 };
 
 const TransactionController = {
-    // 1. CREATE TRANSACTION
+    
+    // ============================================================
+    // 👇 BAGONG FUNCTION: REAL-TIME DATE CHECKING
+    // ============================================================
+    async checkDateAvailability(req, res) {
+        try {
+            const { checkIn, checkOut } = req.query;
+
+            // Tawagin ang Model para kunin ang availability base sa dates
+            const amenities = await OwnerAmenityModel.getAll(checkIn, checkOut);
+            
+            res.json({ success: true, data: amenities });
+
+        } catch (error) {
+            console.error('Check Date Availability Error:', error);
+            res.status(500).json({ success: false, message: 'Error checking availability' });
+        }
+    },
+
+    // ============================================================
+    // 1. CREATE TRANSACTION (WITH FINAL INVENTORY CHECK)
+    // ============================================================
     async create(req, res) {
         let connection;
         try {
-            connection = await db.getConnection();
-            await connection.beginTransaction();
-
+            // Parse Inputs
             const cart = typeof req.body.cart === 'string' ? JSON.parse(req.body.cart) : req.body.cart;
-            
-            // Destructure inputs
             const { fullName, contactNumber, address, numGuest, checkInDate, checkOutDate, booking_type, paymentStatus, bookingStatus } = req.body;
 
-            const isWalkIn = booking_type === 'Walk-in';
-            const user_id = req.user ? req.user.id : (req.body.user_id || null);
-            
-            const mysqlCheckInDate = formatForMySQL(checkInDate);
-            const mysqlCheckOutDate = formatForMySQL(checkOutDate);
-
-            // Validation
+            // Basic Validation
             if (!fullName || !contactNumber || !address || !numGuest || !checkInDate || !checkOutDate) {
                 return res.status(400).json({ success: false, message: 'All fields are required' });
             }
@@ -43,46 +56,62 @@ const TransactionController = {
                 return res.status(400).json({ success: false, message: 'Cart cannot be empty' });
             }
 
-            // ============================================================
-            // ✅ UPDATED CALCULATION LOGIC (Backend Side)
-            // ============================================================
+            const mysqlCheckInDate = formatForMySQL(checkInDate);
+            const mysqlCheckOutDate = formatForMySQL(checkOutDate);
 
-            // 1. Calculate Duration (Days)
+            // 🛑 FINAL CHECK: BAGO MAG-SAVE SA DB
+            for (const item of cart) {
+                const check = await Reservation.checkAvailability(
+                    item.amenity_name, 
+                    mysqlCheckInDate, 
+                    mysqlCheckOutDate
+                );
+
+                if (check.error) {
+                    return res.status(400).json({ success: false, message: check.error });
+                }
+
+                if (item.quantity > check.remaining) {
+                    return res.status(400).json({ 
+                        success: false, 
+                        message: `SOLD OUT: Ang ${item.amenity_name} ay may ${check.remaining} unit(s) na lang na available sa petsang ito.` 
+                    });
+                }
+            }
+
+            // ✅ PROCEED TO SAVE
+            connection = await db.getConnection();
+            await connection.beginTransaction();
+
+            const isWalkIn = booking_type === 'Walk-in';
+            const user_id = req.user ? req.user.id : (req.body.user_id || null);
+            
+            // 1. Calculate Duration
             let days = 1;
             const start = new Date(checkInDate);
             const end = new Date(checkOutDate);
-            
             if (end > start) {
                 const diffTime = Math.abs(end - start);
-                // Round up (e.g., 25 hours = 2 days)
                 days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
             }
-            if (days < 1) days = 1; // Minimum 1 day
+            if (days < 1) days = 1;
 
-            // 2. Calculate Entrance Fee (Guests * 50)
+            // 2. Calculate Totals
             const guestCount = parseInt(numGuest) || 0;
-            const entranceFeePerHead = 50;
-            const totalEntranceFee = guestCount * entranceFeePerHead;
-
-            // 3. Calculate Cart Total (Amenities)
+            const totalEntranceFee = guestCount * 50;
             const cartTotal = cart.reduce((total, item) => total + (parseFloat(item.amenity_price) * parseInt(item.quantity)), 0);
-
-            // 4. Final Total Calculation: (Cart + Entrance) * Days
-            // Dati: const calculatedTotal = cartTotal; (Ito ang mali)
+            
             const calculatedTotal = (cartTotal + totalEntranceFee) * days;
             
-            // ============================================================
-
             let finalTotalAmount = calculatedTotal;
             let finalDownpayment = 0;
             let finalBalance = 0;
 
             if (isWalkIn) {
-                finalTotalAmount = calculatedTotal;
                 finalDownpayment = calculatedTotal; 
                 finalBalance = 0;
             } else {
-                finalDownpayment = finalTotalAmount * 0.2; // 20% Downpayment
+                finalDownpayment = finalTotalAmount * 0.2; // 20% DP
                 finalBalance = finalTotalAmount - finalDownpayment;
             }
 
@@ -91,14 +120,14 @@ const TransactionController = {
             const finalPaymentStatus = paymentStatus || (isWalkIn ? 'Fully Paid' : 'Partial'); 
             const finalBookingStatus = bookingStatus || (isWalkIn ? 'Confirmed' : 'Pending'); 
 
-            // Save to Database
+            // Insert to TransactionDb
             const transactionId = await Transaction.create({
                 transaction_ref,
                 customer_name: fullName,
                 contact_number: contactNumber,
                 customer_address: address,
                 num_guest: numGuest, 
-                total_amount: finalTotalAmount, // ✅ Now stores the correct computed total
+                total_amount: finalTotalAmount,
                 downpayment: finalDownpayment,
                 balance: finalBalance,
                 proof_of_payment,
@@ -108,6 +137,7 @@ const TransactionController = {
                 booking_type: booking_type || 'Online'
             });
 
+            // Insert to ReservationDb
             const reservationsData = cart.map(item => ({
                 transaction_id: transactionId,
                 amenity_name: item.amenity_name,
@@ -126,9 +156,7 @@ const TransactionController = {
                 message: isWalkIn ? 'Walk-in booking created successfully' : 'Transaction created successfully',
                 transaction_ref, 
                 transaction_id: transactionId, 
-                total_amount: finalTotalAmount, 
-                downpayment: finalDownpayment,
-                user_id
+                total_amount: finalTotalAmount
             });
 
         } catch (error) {
@@ -140,7 +168,6 @@ const TransactionController = {
         }
     },
 
-    // ... (Keep the rest of your controller functions as they are)
     // 2. GET ALL TRANSACTIONS
     async getAll(req, res) {
         try {
@@ -161,10 +188,7 @@ const TransactionController = {
             res.status(500).json({ success: false, message: 'Failed to fetch transactions', error: error.message });
         }
     },
-    
-    // ... rest of the file ...
-    // (Siguraduhin mo lang na hindi mabubura yung ibang functions sa baba nito)
-    
+
     // 3. GET TODAY'S BOOKINGS
     async getTodaysBookings(req, res) {
         try {
@@ -223,7 +247,7 @@ const TransactionController = {
         }
     },
 
-    // GET BY CUSTOMER NAME (For Search/Admin)
+    // GET BY CUSTOMER NAME
     async getByCustomer(req, res) {
         try {
             const { customer_name, contact_number } = req.query;
@@ -242,7 +266,7 @@ const TransactionController = {
         }
     },
 
-    // GET BY USER ID (For Admin viewing specific user)
+    // GET BY USER ID
     async getByUserId(req, res) {
         try {
             const { userId } = req.params;
