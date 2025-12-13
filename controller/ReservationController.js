@@ -125,13 +125,14 @@ const ReservationController = {
     }
   },
 
-  // 6. ✅✅✅ RESTORED: GET BY USER ID
+  // 6. ✅✅✅ GET BY USER ID (FIXED: NOW INCLUDES transaction_ref)
   async getByUserId(req, res) {
     try {
       const { userId } = req.params;
       
+      // FIX: Added 't.transaction_ref' to the SELECT statement
       const [reservations] = await db.query(
-        `SELECT r.*, t.user_id 
+        `SELECT r.*, t.transaction_ref, t.user_id 
          FROM ReservationDb r 
          JOIN TransactionDb t ON r.transaction_id = t.id 
          WHERE t.user_id = ? 

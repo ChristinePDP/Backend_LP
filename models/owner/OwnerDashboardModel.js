@@ -2,7 +2,6 @@ import db from '../../config/db.js';
 
 const OwnerDashboardModel = {
 
-    // 1. GET DASHBOARD ANALYTICS (Walang pagbabago dito)
     getAnalytics: async (startDate, endDate) => {
         const params = [startDate, endDate];
         
@@ -55,7 +54,6 @@ const OwnerDashboardModel = {
         };
     },
 
-    // 2. GET TRANSACTIONS LIST (Dito ang Final Fix)
     getTransactions: async (startDate, endDate) => {
         const [rows] = await db.query(`
             SELECT 
@@ -68,12 +66,6 @@ const OwnerDashboardModel = {
                 t.booking_status,
                 t.extension_history,
                 
-                -- OPTION A: Raw String (Kung gusto mo ikaw mag-format sa frontend pero ayaw mo mag-auto-convert)
-                CAST(t.created_at AS CHAR) as created_at,
-
-                -- OPTION B: Formatted String (ITO ANG GAMITIN MO SA DISPLAY)
-                -- Ito ay maglalabas ng "December 12, 2025 08:34 PM" bilang TEXT.
-                -- Dahil text ito, hindi ito pwedeng baguhin ng browser.
                 DATE_FORMAT(t.created_at, '%M %d, %Y %h:%i %p') as formatted_date,
 
                 DATE_FORMAT(MIN(r.check_in_date), '%b %d, %Y %h:%i %p') as check_in_formatted,
@@ -84,7 +76,7 @@ const OwnerDashboardModel = {
             FROM TransactionDb t
             LEFT JOIN ReservationDb r ON t.id = r.transaction_id
             
-            -- Filter logic stays the same (Database Date)
+            -- Filter logic(Database Date)
             WHERE DATE(t.created_at) BETWEEN ? AND ?
             
             GROUP BY t.id
