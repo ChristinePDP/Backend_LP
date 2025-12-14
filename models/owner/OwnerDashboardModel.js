@@ -63,6 +63,7 @@ const OwnerDashboardModel = {
                 t.booking_type, 
                 t.total_amount,
                 t.balance,
+                t.downpayment, 
                 t.booking_status,
                 t.extension_history,
                 

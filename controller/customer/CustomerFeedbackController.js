@@ -16,8 +16,6 @@ export const getAllFeedbacks = async (req, res) => {
 export const createFeedback = async (req, res) => {
     try {
         const { transaction_ref } = req.body;
-
-        // Check muna kung may feedback na
         if (transaction_ref) {
             const existing = await CustomerFeedbackModel.getByTransactionRef(transaction_ref);
             if (existing) {
@@ -34,13 +32,12 @@ export const createFeedback = async (req, res) => {
     }
 };
 
-// STATUS CHECKER (ITO ANG HINAHANAP NG FRONTEND MO)
+// STATUS CHECKER
 export const checkFeedbackStatus = async (req, res) => {
     try {
         const { ref } = req.params;
         const existing = await CustomerFeedbackModel.getByTransactionRef(ref);
-        
-        // Ibabalik: true kung meron na, false kung wala pa
+
         res.json({ hasFeedback: !!existing }); 
 
     } catch (error) {

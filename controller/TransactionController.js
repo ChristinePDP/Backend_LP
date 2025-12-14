@@ -1,6 +1,5 @@
 import Transaction from '../models/TransactionModel.js';
 import Reservation from '../models/ReservationModel.js';
-// 👇 IMPORTANTE: Idagdag ito para gumana ang date checking
 import OwnerAmenityModel from '../models/owner/OwnerAmenityModel.js'; 
 import db from '../config/db.js';
 
@@ -22,8 +21,6 @@ const TransactionController = {
     async checkDateAvailability(req, res) {
         try {
             const { checkIn, checkOut } = req.query;
-
-            // Tawagin ang Model para kunin ang availability base sa dates
             const amenities = await OwnerAmenityModel.getAll(checkIn, checkOut);
             
             res.json({ success: true, data: amenities });
